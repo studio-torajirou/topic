@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>クラス紹介 管理画面</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <script>
+    // ★★★ GASのURLをここに貼り付け ★★★
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwL63W6bjqZUkXGIGTA0WvvBGm5kFa1azEjUb-27tA11fg96Uq7h2g0Yf1zlcmH75cOlw/exec";
+
+    // パスワード設定
+    const ADMIN_PASSWORD = "0126"; 
+  </script>
+
+  <style>
+    /* 共通スタイル (予約システムと統一) */
+    :root {
+      --bg: #fff0f5;
+      --bg-card: #ffffff;
+      --ink: #442c2e;
+      --ink-muted: #886064;
+      --accent: #ff91b4;
+      --accent-deep: #e91e63;
+      --line: #f0d0d8;
+      --radius-lg: 16px;
+      --shadow-soft: 0 4px 16px rgba(233, 30, 99, 0.08);
+      --font-main: "M PLUS Rounded 1c", sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    
+    body {
+      margin: 0; padding: 0;
+      font-family: var(--font-main);
+      background: radial-gradient(circle at top left, #fff0f6, #fffbfd 60%, #ffffff);
+      color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .container { max-width: 600px; margin: 0 auto; padding: 20px 12px 100px; }
+
+    h2 {
+      text-align: center;
+      color: var(--accent-deep);
+      font-size: 20px;
+      margin-bottom: 24px;
+    }
+
+    /* カードスタイル */
+    .card {
+      background: var(--bg-card);
+      padding: 20px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 20px;
+      box-shadow: var(--shadow-soft);
+      border: 1px solid var(--line);
+      border-left: 6px solid #ccc; /* 未入力時はグレー */
+      transition: transform 0.1s;
+    }
+    .card.active { border-left-color: var(--accent); } /* 入力ありでピンク */
+
+    .card-title {
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: var(--ink);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    label { display: block; margin-top: 12px; font-size: 14px; font-weight: bold; color: var(--ink-muted); }
+    
+    /* 入力フォーム */
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 12px;
+      margin-top: 6px;
+      border: 2px solid var(--line);
+      border-radius: 8px;
+      box-sizing: border-box;
+      font-size: 16px;
+      font-family: var(--font-main);
+      color: var(--ink);
+      background: #fafafa;
+      outline: none;
+    }
+    input[type="text"]:focus, textarea:focus {
+      border-color: var(--accent);
+      background: #fff;
+    }
+    textarea { height: 100px; resize: vertical; }
+
+    /* 画像プレビュー */
+    .preview-area {
+      margin-top: 10px;
+      text-align: center;
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 10px;
+      min-height: 50px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    img.preview { max-width: 100%; max-height: 200px; border-radius: 4px; display: block; }
+    
+    /* ボタン */
+    .btn-wrap {
+      position: fixed; bottom: 0; left: 0; width: 100%;
+      background: rgba(255,255,255,0.9);
+      padding: 16px;
+      text-align: center;
+      box-shadow: 0 -4px 10px rgba(0,0,0,0.05);
+      z-index: 10;
+    }
+    .btn-submit {
+      background: linear-gradient(135deg, #ff91b4, #ec407a);
+      color: #fff;
+      border: none;
+      padding: 14px 40px;
+      font-size: 18px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 4px 12px rgba(236, 64, 122, 0.4);
+      transition: transform 0.1s;
+    }
+    .btn-submit:active { transform: scale(0.96); }
+    .btn-submit:disabled { background: #ccc; box-shadow: none; }
+
+    #status { font-size: 14px; margin-bottom: 8px; font-weight: bold; }
+
+    /* パスワード画面 */
+    #authOverlay {
+      position: fixed; inset: 0; z-index: 9999;
+      background: #fff0f5; 
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: opacity 0.3s;
+    }
+    .auth-box {
+      background: #ffffff; padding: 40px; border-radius: 24px;
+      box-shadow: 0 8px 24px rgba(233, 30, 99, 0.1);
+      text-align: center; width: 90%; max-width: 400px;
+    }
+    .auth-title { font-size: 24px; font-weight: bold; color: #442c2e; margin-bottom: 20px; }
+    .auth-input { 
+      font-size: 24px; padding: 12px; width: 100%; border: 2px solid #f0d0d8; 
+      border-radius: 12px; margin-bottom: 20px; text-align: center; letter-spacing: 4px;
+    }
+    .auth-btn {
+      background: linear-gradient(135deg, #ff91b4, #ec407a); color: #fff;
+      border: none; padding: 12px 32px; font-size: 18px; border-radius: 999px;
+      cursor: pointer; width: 100%; font-weight: bold;
+    }
+
+    /* ローディング */
+    .loading-overlay { position: fixed; inset: 0; background: rgba(255, 240, 245, 0.7); display: none; align-items: center; justify-content: center; z-index: 30; backdrop-filter: blur(5px); }
+    .loading-spinner { width: 50px; height: 50px; border-radius: 50%; border: 5px solid #f8bbd0; border-top-color: #ec407a; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+  </style>
+</head>
+<body>
+
+  <div id="authOverlay">
+    <div class="auth-box">
+      <div class="auth-title">🔒 編集ログイン</div>
+      <input type="password" id="passInput" class="auth-input" inputmode="numeric" placeholder="●●●●">
+      <button class="auth-btn" onclick="checkPassword()">認証する</button>
+      <p id="passError" style="color:#ef5350; margin-top:10px; font-weight:bold; display:none; font-size:14px;">パスワードが違います</p>
+    </div>
+  </div>
+
+  <div id="loadingOverlay" class="loading-overlay"><div class="loading-spinner"></div></div>
+
+  <div class="container">
+    <h2>クラス紹介・画像編集</h2>
+    <div id="cards-container"></div>
+  </div>
+
+  <div class="btn-wrap">
+    <div id="status"></div>
+    <button id="submitBtn" class="btn-submit" onclick="uploadData()">一括更新する</button>
+  </div>
+
+  <script>
+    // --- パスワード認証 ---
+    document.getElementById('passInput').addEventListener('keypress', function(e){ if(e.key === 'Enter') checkPassword(); });
+    function checkPassword() {
+      const input = document.getElementById('passInput');
+      if (input.value === ADMIN_PASSWORD) {
+        document.getElementById('authOverlay').style.opacity = '0';
+        setTimeout(() => { document.getElementById('authOverlay').style.display = 'none'; }, 300);
+        loadInitialData(); // 認証後にデータロード
+      } else {
+        document.getElementById('passError').style.display = 'block';
+        input.value = '';
+      }
+    }
+
+    // --- API通信 ---
+    async function gas(action, payload) {
+      if(!GAS_API_URL || GAS_API_URL.indexOf('script.google.com') === -1) {
+        alert('GAS_API_URLが設定されていません'); return;
+      }
+      const response = await fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: action, payload: payload })
+      });
+      return await response.json();
+    }
+
+    // --- メイン処理 ---
+    
+    // 画面生成
+    function createCards() {
+      const container = document.getElementById('cards-container');
+      let html = '';
+      for (let i = 1; i <= 5; i++) {
+        html += `
+          <div class="card" id="card_${i}">
+            <div class="card-title">Class ${i}</div>
+            
+            <label>タイトル</label>
+            <input type="text" id="title_${i}" oninput="markActive(${i})">
+            
+            <label>紹介文</label>
+            <textarea id="text_${i}" oninput="markActive(${i})"></textarea>
+            
+            <label>画像変更 (選択しなければ元のまま)</label>
+            <input type="file" accept="image/*" onchange="previewImage(this, ${i})">
+            
+            <input type="hidden" id="file_data_${i}">
+            
+            <div class="preview-area">
+              <img id="preview_${i}" class="preview" style="display:none;">
+              <span id="no_img_${i}" style="color:#aaa; font-size:12px;">画像なし</span>
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    // 初期データロード
+    function loadInitialData() {
+      createCards(); // 枠を作る
+      document.getElementById('loadingOverlay').style.display = 'flex';
+      
+      gas('getInitialData').then(data => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        if (!data || data.length === 0) return;
+
+        data.forEach(item => {
+          const i = item.id;
+          if (document.getElementById(`title_${i}`)) {
+            document.getElementById(`title_${i}`).value = item.title || "";
+            document.getElementById(`text_${i}`).value = item.text || "";
+            
+            // 画像プレビュー表示
+            if (item.image) {
+              const img = document.getElementById(`preview_${i}`);
+              img.src = item.image;
+              img.style.display = "block";
+              document.getElementById(`no_img_${i}`).style.display = "none";
+            }
+            markActive(i);
+          }
+        });
+      }).catch(err => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        alert("データ読み込みエラー: " + err);
+      });
+    }
+
+    // 入力があったらカードの枠線をピンクにする
+    function markActive(index) {
+      const card = document.getElementById(`card_${index}`);
+      const title = document.getElementById(`title_${index}`).value;
+      const text = document.getElementById(`text_${index}`).value;
+      if (title || text) {
+        card.classList.add('active');
+      } else {
+        card.classList.remove('active');
+      }
+    }
+
+    // 画像選択時のプレビュー＆Base64変換
+    function previewImage(input, index) {
+      const file = input.files[0];
+      const preview = document.getElementById(`preview_${index}`);
+      const noImg = document.getElementById(`no_img_${index}`);
+      
+      if (file) {
+        // サイズ制限チェック (例: 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          alert("ファイルサイズが大きすぎます(5MB以下にしてください)");
+          input.value = "";
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          preview.src = e.target.result;
+          preview.style.display = "block";
+          noImg.style.display = "none";
+          
+          // data:image/jpeg;base64,〜 の形からデータ部分だけ抜き出してhiddenにセット
+          const rawBase64 = e.target.result.split(',')[1];
+          document.getElementById(`file_data_${index}`).value = rawBase64;
+          
+          markActive(index);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        // キャンセルされた場合
+        document.getElementById(`file_data_${index}`).value = "";
+      }
+    }
+
+    // 保存処理
+    function uploadData() {
+      const btn = document.getElementById('submitBtn');
+      const status = document.getElementById('status');
+      
+      if(!confirm("更新してよろしいですか？")) return;
+
+      btn.disabled = true;
+      btn.innerText = "送信中...";
+      document.getElementById('loadingOverlay').style.display = 'flex';
+
+      // データの収集
+      const payload = {};
+      for(let i=1; i<=5; i++){
+        payload[`title_${i}`] = document.getElementById(`title_${i}`).value;
+        payload[`text_${i}`] = document.getElementById(`text_${i}`).value;
+        payload[`file_data_${i}`] = document.getElementById(`file_data_${i}`).value; // Base64
+      }
+
+      gas('saveAllData', payload).then(res => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        if(res.success){
+          status.innerText = "更新完了！";
+          status.style.color = "var(--accent-deep)";
+          alert("更新が完了しました！");
+          // 少し待ってリロード（画像キャッシュ更新のため）
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          status.innerText = "エラー発生";
+          alert("更新失敗: " + JSON.stringify(res));
+        }
+      }).catch(err => {
+        document.getElementById('loadingOverlay').style.display = 'none';
+        status.innerText = "通信エラー";
+        alert("通信エラー: " + err);
+      }).finally(() => {
+        btn.disabled = false;
+        btn.innerText = "一括更新する";
+      });
+    }
+  </script>
+</body>
+</html>
