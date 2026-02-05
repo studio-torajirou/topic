@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Studio 寅次郎 | クラス紹介管理</title>
+    <style>
+        body { font-family: "Helvetica Neue", Arial, sans-serif; background-color: #f4f4f4; color: #333; padding: 20px; }
+        h2 { text-align: center; color: #F39800; }
+        .container { max-width: 600px; margin: 0 auto; display: none; /* 初期状態は非表示(ログイン後表示) */ }
+        
+        /* ログイン画面 */
+        #login-screen {
+            max-width: 400px; margin: 100px auto; background: white; padding: 40px;
+            border-radius: 10px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* カードスタイル */
+        .card { background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-left: 5px solid #ccc; }
+        .card.active { border-left-color: #67C5B5; } 
+        
+        .card-title { font-weight: bold; margin-bottom: 10px; display: flex; justify-content: space-between; }
+        label { display: block; margin-top: 10px; font-size: 0.9rem; font-weight: bold; }
+        input[type="text"], input[type="password"], textarea { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        textarea { height: 80px; resize: vertical; }
+        input[type="file"] { margin-top: 5px; }
+
+        /* ボタン */
+        .btn-area { text-align: center; margin-top: 30px; position: sticky; bottom: 20px; background: rgba(255,255,255,0.9); padding: 10px; border-radius: 50px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        button { background: #F39800; color: white; border: none; padding: 15px 40px; border-radius: 30px; font-size: 1.2rem; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        button:hover { background: #d68500; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .note { font-size: 0.8rem; color: #666; margin-bottom: 5px; }
+        .loading { color: blue; font-weight: bold; text-align: center; margin-top: 20px; }
+        .error-msg { color: red; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+    <div id="login-screen">
+        <h2>管理者ログイン</h2>
+        <p>パスワードを入力してください</p>
+        <input type="password" id="auth-password" placeholder="Passcode" style="text-align:center; font-size:1.2rem;">
+        <br><br>
+        <button onclick="tryLogin()">ログイン</button>
+        <div id="login-msg" class="error-msg"></div>
+    </div>
+
+    <div id="main-interface" class="container">
+        <h2>クラス紹介 更新画面</h2>
+        <p style="text-align:center; font-size:0.9rem;">
+            画像を選択しなくても、前回の画像が維持されます。<br>
+            削除したい場合は、タイトルとコメントを空にしてください。
+        </p>
+
+        <form id="mainForm">
+            <div id="form-container">
+                <p class="loading">データを読み込み中...</p>
+            </div>
+
+            <div class="btn-area">
+                <button type="button" id="submitBtn" onclick="uploadData()">一括更新する</button>
+                <div id="status" style="margin-top:10px; font-weight:bold;"></div>
+            </div>
+        </form>
+    </div>
+
+    <script src="admin_api.js"></script>
+    <script>
+        // --- ログイン処理 ---
+        async function tryLogin() {
+            const pass = document.getElementById('auth-password').value;
+            const msg = document.getElementById('login-msg');
+            const btn = document.querySelector('#login-screen button');
+
+            if (!pass) {
+                msg.innerText = "パスワードを入力してください";
+                return;
+            }
+
+            msg.innerText = "";
+            btn.disabled = true;
+            btn.innerText = "認証中...";
+
+            try {
+                // 初回データ取得を試みることで認証確認とする
+                const data = await callGasApi('getInitialData');
+                
+                // 成功したら画面切り替え
+                document.getElementById('login-screen').style.display = 'none';
+                document.getElementById('main-interface').style.display = 'block';
+                
+                // フォーム生成
+                createForm(data);
+
+            } catch (err) {
+                msg.innerText = err.message;
+                btn.disabled = false;
+                btn.innerText = "ログイン";
+            }
+        }
+
+        // --- フォーム生成 ---
+        function createForm(currentData) {
+            const container = document.getElementById('form-container');
+            container.innerHTML = ""; 
+
+            for (let i = 1; i <= 5; i++) {
+                // 配列からIDが一致するものを探す（なければ空）
+                const data = currentData.find(d => d.id === i) || {};
+                
+                const html = `
+                  <div class="card ${data.title ? 'active' : ''}">
+                    <div class="card-title">Class ${i}</div>
+                    
+                    <label>画像 (自動リサイズ)</label>
+                    <div class="note">※変更する場合のみ選択してください</div>
+                    <input type="file" accept="image/*" onchange="handleFileSelect(this, ${i})">
+                    <input type="hidden" name="file_data_${i}" id="file_data_${i}">
+
+                    <label>タイトル</label>
+                    <input type="text" name="title_${i}" value="${data.title || ''}" placeholder="例：シルシャーサナ">
+
+                    <label>コメント</label>
+                    <textarea name="text_${i}" placeholder="説明文を入力">${data.text || ''}</textarea>
+                  </div>
+                `;
+                container.insertAdjacentHTML('beforeend', html);
+            }
+        }
+
+        // --- 画像処理 (Base64変換) ---
+        function handleFileSelect(input, index) {
+            const file = input.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    // data:image/jpeg;base64,〜 のヘッダーを除去して格納
+                    const rawBase64 = e.target.result.split(',')[1];
+                    document.getElementById(`file_data_${index}`).value = rawBase64;
+                };
+                reader.readAsDataURL(file);
+            } else {
+                document.getElementById(`file_data_${index}`).value = "";
+            }
+        }
+
+        // --- 更新送信処理 ---
+        async function uploadData() {
+            const btn = document.getElementById('submitBtn');
+            const status = document.getElementById('status');
+            const form = document.getElementById('mainForm');
+
+            if(!confirm("GitHubへデータを送信し、Webサイトを更新しますか？")) return;
+
+            btn.disabled = true;
+            btn.innerText = "送信中...";
+            status.innerText = "";
+            status.style.color = "#333";
+
+            // フォームデータをオブジェクト化
+            const formData = {};
+            const inputs = form.querySelectorAll('input, textarea');
+            inputs.forEach(input => {
+                formData[input.name] = input.value;
+            });
+
+            try {
+                // API送信
+                const message = await callGasApi('saveAllData', formData);
+                
+                status.innerText = message;
+                status.style.color = "green";
+                btn.innerText = "更新完了";
+                
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerText = "一括更新する";
+                }, 3000);
+
+            } catch (err) {
+                status.innerText = "エラー: " + err.message;
+                status.style.color = "red";
+                btn.disabled = false;
+                btn.innerText = "一括更新する";
+            }
+        }
+    </script>
+</body>
+</html>
